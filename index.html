@@ -6,9 +6,8 @@
     <title>Магазин</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
+
         body {
             margin: 0;
             padding: 16px;
@@ -16,6 +15,12 @@
             background: #f8fafc;
             color: #111827;
         }
+
+        main {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
         header {
             display: flex;
             align-items: center;
@@ -31,11 +36,14 @@
             font-size: 22px;
         }
 
-        main {
-            max-width: 420px;
-            margin: 0 auto;
+        .screen {
+            display: none;
+        }
+        .screen.active {
+            display: block;
         }
 
+        /* Страница 1 — сетка лотов */
         .lots-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -80,18 +88,32 @@
             margin-bottom: 6px;
         }
 
-        .buy-button {
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 700;
-            color: #16a34a;
-            background: transparent;
-            border: 1px solid #16a34a;
+        .btn {
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
             border-radius: 999px;
+            border: none;
             cursor: pointer;
         }
 
-        .buy-button:active {
+        .btn-outline-green {
+            background: transparent;
+            color: #16a34a;
+            border: 1px solid #16a34a;
+        }
+
+        .btn-green {
+            background: #16a34a;
+            color: #ffffff;
+        }
+
+        .btn-gray {
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        .btn:active {
             transform: scale(0.97);
         }
 
@@ -102,105 +124,336 @@
             text-align: center;
         }
 
+        /* Страница 2 — карточка товара */
+        .detail-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 1px 6px rgba(15,23,42,0.12);
+        }
+
+        .detail-top {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+
+        .detail-image {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            border: 2px solid #111827;
+        }
+
+        .detail-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .detail-desc {
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .qty-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 12px;
+        }
+
+        .qty-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .qty-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 1px solid #d1d5db;
+            background: #f9fafb;
+            font-size: 18px;
+            line-height: 0;
+            cursor: pointer;
+        }
+
+        .qty-value {
+            min-width: 32px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .detail-price {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .detail-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        /* Страница 3 — “оплата” */
+        .pay-summary {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 1px 6px rgba(15,23,42,0.12);
+        }
+
+        .pay-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .pay-row.total {
+            font-weight: 700;
+            font-size: 16px;
+            margin-top: 8px;
+        }
+
+        .pay-actions {
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+        }
+
         @media (max-width: 360px) {
-            .lots-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
+            .lots-grid { grid-template-columns: repeat(2, 1fr); }
+            .detail-top { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
 <body>
-    <main>
-        <header>
-            <span>🛒</span>
-            <h1>Магазин</h1>
-        </header>
+<main>
+    <header>
+        <span>🛒</span>
+        <h1>Магазин</h1>
+    </header>
 
-        <section class="lots-grid" id="lots-grid">
-            <!-- карточки будут сгенерированы из JS -->
-        </section>
+    <!-- Страница 1: список лотов -->
+    <section id="screen-list" class="screen active">
+        <div class="lots-grid" id="lots-grid"></div>
+        <div class="hint">Выбери лот → «КУПИТЬ» для подробностей и оформления.</div>
+    </section>
 
-        <div class="hint">
-            Нажми «КУПИТЬ», введи количество — заказ уйдёт в Telegram‑бота.
+    <!-- Страница 2: карточка товара -->
+    <section id="screen-detail" class="screen">
+        <div class="detail-card">
+            <div class="detail-top">
+                <div class="detail-image"></div>
+                <div>
+                    <div id="detail-title" class="detail-title"></div>
+                    <div id="detail-desc" class="detail-desc"></div>
+                </div>
+            </div>
+
+            <div class="qty-row">
+                <div class="qty-controls">
+                    <button class="qty-btn" data-delta="-1">−</button>
+                    <div id="qty-value" class="qty-value">1</div>
+                    <button class="qty-btn" data-delta="1">+</button>
+                </div>
+                <div id="detail-price" class="detail-price"></div>
+            </div>
+
+            <div class="detail-actions">
+                <button id="btn-back-from-detail" class="btn btn-gray" style="flex:1;">Назад</button>
+                <button id="btn-to-pay" class="btn btn-green" style="flex:2;">К ОПЛАТЕ</button>
+            </div>
         </div>
-    </main>
+    </section>
 
-    <script>
-        // Конфигурация лотов
-        const products = [
-            { id: 1, name: "лот 1", price: 500, description: "Описание продукта 1" },
-            { id: 2, name: "лот 2", price: 700, description: "Описание продукта 2" },
-            { id: 3, name: "лот 3", price: 900, description: "Описание продукта 3" },
-            { id: 4, name: "лот 1", price: 500, description: "Описание продукта 4" },
-            { id: 5, name: "лот 2", price: 700, description: "Описание продукта 5" },
-            { id: 6, name: "лот 3", price: 900, description: "Описание продукта 6" }
-        ];
+    <!-- Страница 3: оплата -->
+    <section id="screen-pay" class="screen">
+        <div class="pay-summary">
+            <div class="pay-row">
+                <span>Товар</span>
+                <span id="pay-name"></span>
+            </div>
+            <div class="pay-row">
+                <span>Количество</span>
+                <span id="pay-qty"></span>
+            </div>
+            <div class="pay-row">
+                <span>Цена за шт.</span>
+                <span id="pay-price"></span>
+            </div>
+            <div class="pay-row total">
+                <span>Итого к оплате</span>
+                <span id="pay-total"></span>
+            </div>
+        </div>
 
-        const gridEl = document.getElementById("lots-grid");
+        <div class="pay-actions">
+            <button id="btn-back-from-pay" class="btn btn-gray" style="flex:1;">Назад</button>
+            <button id="btn-pay" class="btn btn-green" style="flex:2;">ОПЛАТИТЬ</button>
+        </div>
 
-        function renderLots() {
-            gridEl.innerHTML = "";
-            products.forEach((p) => {
-                const card = document.createElement("article");
-                card.className = "lot-card";
+        <div class="hint">Здесь пока тестовая “оплата” без настоящих денег.</div>
+    </section>
+</main>
 
-                card.innerHTML = `
-                    <div class="lot-image-placeholder"></div>
-                    <div class="lot-name">${p.name}</div>
-                    <div class="lot-desc">${p.description}</div>
-                    <div class="lot-price">${p.price}₽</div>
-                    <button class="buy-button" data-id="${p.id}">КУПИТЬ</button>
-                `;
+<script>
+    const tg = window.Telegram ? Telegram.WebApp : null;
 
-                gridEl.appendChild(card);
-            });
-        }
+    const products = [
+        { id: 1, name: "лот 1", price: 500, description: "Описание продукта 1" },
+        { id: 2, name: "лот 2", price: 700, description: "Описание продукта 2" },
+        { id: 3, name: "лот 3", price: 900, description: "Описание продукта 3" },
+        { id: 4, name: "лот 1", price: 500, description: "Описание продукта 4" },
+        { id: 5, name: "лот 2", price: 700, description: "Описание продукта 5" },
+        { id: 6, name: "лот 3", price: 900, description: "Описание продукта 6" }
+    ];
 
-        function handleBuyClick(event) {
-            const btn = event.target.closest(".buy-button");
-            if (!btn) return;
+    const screens = {
+        list: document.getElementById("screen-list"),
+        detail: document.getElementById("screen-detail"),
+        pay: document.getElementById("screen-pay")
+    };
 
-            const id = Number(btn.dataset.id);
-            const product = products.find((p) => p.id === id);
-            if (!product) return;
+    const lotsGridEl = document.getElementById("lots-grid");
+    const detailTitleEl = document.getElementById("detail-title");
+    const detailDescEl = document.getElementById("detail-desc");
+    const detailPriceEl = document.getElementById("detail-price");
+    const qtyValueEl = document.getElementById("qty-value");
 
-            const qtyStr = prompt(`Сколько штук «${product.name}» оформить?`, "1");
-            if (qtyStr === null) return; // отмена
+    const payNameEl = document.getElementById("pay-name");
+    const payQtyEl = document.getElementById("pay-qty");
+    const payPriceEl = document.getElementById("pay-price");
+    const payTotalEl = document.getElementById("pay-total");
 
-            const qty = Number(qtyStr);
-            if (!Number.isFinite(qty) || qty <= 0) {
-                alert("Введи положительное число.");
-                return;
-            }
+    let currentProduct = null;
+    let currentQty = 1;
 
-            const payload = {
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                quantity: qty,
-                total: product.price * qty
-            };
+    function showScreen(name) {
+        Object.values(screens).forEach(s => s.classList.remove("active"));
+        screens[name].classList.add("active");
+    }
 
+    function renderLots() {
+        lotsGridEl.innerHTML = "";
+        products.forEach(p => {
+            const card = document.createElement("article");
+            card.className = "lot-card";
+            card.dataset.id = p.id;
+
+            card.innerHTML = `
+                <div class="lot-image-placeholder"></div>
+                <div class="lot-name">${p.name}</div>
+                <div class="lot-desc">${p.description}</div>
+                <div class="lot-price">${p.price}₽</div>
+                <button class="btn btn-outline-green">КУПИТЬ</button>
+            `;
+            lotsGridEl.appendChild(card);
+        });
+    }
+
+    function openDetail(productId) {
+        const p = products.find(x => x.id === productId);
+        if (!p) return;
+
+        currentProduct = p;
+        currentQty = 1;
+        qtyValueEl.textContent = "1";
+        detailTitleEl.textContent = p.name;
+        detailDescEl.textContent = p.description;
+        detailPriceEl.textContent = `${p.price}₽ / шт.`;
+
+        showScreen("detail");
+    }
+
+    function updateQty(delta) {
+        let next = currentQty + delta;
+        if (next < 1) next = 1;
+        if (next > 99) next = 99;
+        currentQty = next;
+        qtyValueEl.textContent = String(currentQty);
+    }
+
+    function preparePayScreen() {
+        if (!currentProduct) return;
+
+        const total = currentProduct.price * currentQty;
+
+        payNameEl.textContent = currentProduct.name;
+        payQtyEl.textContent = `${currentQty} шт.`;
+        payPriceEl.textContent = `${currentProduct.price}₽`;
+        payTotalEl.textContent = `${total}₽`;
+
+        showScreen("pay");
+    }
+
+    function sendFakePayment() {
+        if (!currentProduct) return;
+        const total = currentProduct.price * currentQty;
+
+        const payload = {
+            type: "order",
+            id: currentProduct.id,
+            name: currentProduct.name,
+            price: currentProduct.price,
+            quantity: currentQty,
+            total: total
+        };
+
+        if (tg) {
             try {
-                Telegram.WebApp.sendData(JSON.stringify(payload));
+                tg.sendData(JSON.stringify(payload));
             } catch (e) {
-                console.error("Ошибка отправки в Telegram WebApp:", e);
+                console.error("Ошибка sendData:", e);
                 alert("Не удалось отправить заказ в бота.");
                 return;
             }
-
-            Telegram.WebApp.close();
+            tg.close();
+        } else {
+            alert("WebApp вне Telegram, заказ: " + JSON.stringify(payload, null, 2));
         }
+    }
 
-        renderLots();
-        gridEl.addEventListener("click", handleBuyClick);
+    // Слушатели
+    lotsGridEl.addEventListener("click", (e) => {
+        const card = e.target.closest(".lot-card");
+        if (!card) return;
+        const id = Number(card.dataset.id);
+        openDetail(id);
+    });
 
-        if (window.Telegram && Telegram.WebApp) {
-            Telegram.WebApp.ready();
-            Telegram.WebApp.expand();
-        }
-    </script>
+    document.querySelectorAll(".qty-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const delta = Number(btn.dataset.delta);
+            updateQty(delta);
+        });
+    });
+
+    document.getElementById("btn-back-from-detail")
+        .addEventListener("click", () => showScreen("list"));
+
+    document.getElementById("btn-to-pay")
+        .addEventListener("click", preparePayScreen);
+
+    document.getElementById("btn-back-from-pay")
+        .addEventListener("click", () => showScreen("detail"));
+
+    document.getElementById("btn-pay")
+        .addEventListener("click", sendFakePayment);
+
+    renderLots();
+
+    if (tg) {
+        tg.ready();
+        tg.expand();
+    }
+</script>
 </body>
 </html>
+
 
 
