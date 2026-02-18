@@ -1,34 +1,206 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Магазин</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@telegram-apps/sdk@3/react"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f8fafc;
+            color: #111827;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+        }
+        header span {
+            font-size: 22px;
+        }
+
+        main {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        .lots-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .lot-card {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 10px 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.10);
+        }
+
+        .lot-image-placeholder {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 2px solid #111827;
+            margin-bottom: 6px;
+        }
+
+        .lot-name {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .lot-desc {
+            font-size: 11px;
+            color: #6b7280;
+            text-align: center;
+            min-height: 24px;
+        }
+
+        .lot-price {
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 4px;
+            margin-bottom: 6px;
+        }
+
+        .buy-button {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #16a34a;
+            background: transparent;
+            border: 1px solid #16a34a;
+            border-radius: 999px;
+            cursor: pointer;
+        }
+
+        .buy-button:active {
+            transform: scale(0.97);
+        }
+
+        .hint {
+            margin-top: 18px;
+            font-size: 11px;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        @media (max-width: 360px) {
+            .lots-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>🛒 Магазин</h1>
-    <div id="products">
-        <button onclick="add('Бургер',500)">🍔 Бургер 500₽</button>
-        <button onclick="add('Пицца',800)">🍕 Пицца 800₽</button>
-    </div>
-    <div id="basket"></div>
-    <button onclick="sendOrder()">Отправить заказ</button>
+    <main>
+        <header>
+            <span>🛒</span>
+            <h1>Магазин</h1>
+        </header>
+
+        <section class="lots-grid" id="lots-grid">
+            <!-- карточки будут сгенерированы из JS -->
+        </section>
+
+        <div class="hint">
+            Нажми «КУПИТЬ», введи количество — заказ уйдёт в Telegram‑бота.
+        </div>
+    </main>
 
     <script>
-        let basket = [];
-        function add(name, price) {
-            basket.push({name, price});
-            updateBasket();
+        // Конфигурация лотов
+        const products = [
+            { id: 1, name: "лот 1", price: 500, description: "Описание продукта 1" },
+            { id: 2, name: "лот 2", price: 700, description: "Описание продукта 2" },
+            { id: 3, name: "лот 3", price: 900, description: "Описание продукта 3" },
+            { id: 4, name: "лот 1", price: 500, description: "Описание продукта 4" },
+            { id: 5, name: "лот 2", price: 700, description: "Описание продукта 5" },
+            { id: 6, name: "лот 3", price: 900, description: "Описание продукта 6" }
+        ];
+
+        const gridEl = document.getElementById("lots-grid");
+
+        function renderLots() {
+            gridEl.innerHTML = "";
+            products.forEach((p) => {
+                const card = document.createElement("article");
+                card.className = "lot-card";
+
+                card.innerHTML = `
+                    <div class="lot-image-placeholder"></div>
+                    <div class="lot-name">${p.name}</div>
+                    <div class="lot-desc">${p.description}</div>
+                    <div class="lot-price">${p.price}₽</div>
+                    <button class="buy-button" data-id="${p.id}">КУПИТЬ</button>
+                `;
+
+                gridEl.appendChild(card);
+            });
         }
-        function updateBasket() {
-            document.getElementById('basket').innerHTML = 
-                `Корзина: ${basket.length} товаров`;
-        }
-        function sendOrder() {
-            Telegram.WebApp.sendData(JSON.stringify(basket));
+
+        function handleBuyClick(event) {
+            const btn = event.target.closest(".buy-button");
+            if (!btn) return;
+
+            const id = Number(btn.dataset.id);
+            const product = products.find((p) => p.id === id);
+            if (!product) return;
+
+            const qtyStr = prompt(`Сколько штук «${product.name}» оформить?`, "1");
+            if (qtyStr === null) return; // отмена
+
+            const qty = Number(qtyStr);
+            if (!Number.isFinite(qty) || qty <= 0) {
+                alert("Введи положительное число.");
+                return;
+            }
+
+            const payload = {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                quantity: qty,
+                total: product.price * qty
+            };
+
+            try {
+                Telegram.WebApp.sendData(JSON.stringify(payload));
+            } catch (e) {
+                console.error("Ошибка отправки в Telegram WebApp:", e);
+                alert("Не удалось отправить заказ в бота.");
+                return;
+            }
+
             Telegram.WebApp.close();
         }
-        Telegram.WebApp.ready();
-        Telegram.WebApp.expand();
+
+        renderLots();
+        gridEl.addEventListener("click", handleBuyClick);
+
+        if (window.Telegram && Telegram.WebApp) {
+            Telegram.WebApp.ready();
+            Telegram.WebApp.expand();
+        }
     </script>
 </body>
 </html>
+
+
