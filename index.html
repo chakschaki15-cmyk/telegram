@@ -1,226 +1,284 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <script src="https://unpkg.com/@tonconnect/sdk@2.0.5/dist/tonconnect-sdk.min.js"></script>
-<script src="https://unpkg.com/@tonconnect/ui-react@1.0.3/dist/ton-connect-ui.min.js"></script>
-    <script>async function payWithTON() {
-    if (!currentProduct) return;
-
-    const totalTon = (currentProduct.price * currentQty * 0.013) / 1.20; // ~в TON
-
-    const payload = {
-        validUntil: Math.floor(Date.now() / 1000) + 60 * 5, // 5 мин
-        messages: [{
-            address: "ТВОЙ_TON_КОШЕЛЕК", // @wallet → твой адрес
-            amount: (totalTon * 1e9).toString(), // nanoTON
-            payload: `order_${currentProduct.id}_${currentQty}` // комментарий
-        }]
-    };
-
-    try {
-        const result = await tonConnectUI.sendTransaction(payload);
-        console.log("✅ TON оплачено:", result);
-        Telegram.WebApp.sendData(JSON.stringify({
-            type: "ton_paid",
-            tx: result.boc,
-            order: { ...currentProduct, quantity: currentQty }
-        }));
-        Telegram.WebApp.close();
-    } catch (e) {
-        alert("❌ Оплата отменена");
-    }
-}
-
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Магазин</title>
+
+    <!-- 1. Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- 2. TON Connect UI (обычный, НЕ React) -->
+    <script src="https://unpkg.com/@tonconnect/ui@2.0.5/dist/tonconnect-ui.min.js"></script>
+
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0f1117;
+            --card: #1a1d27;
+            --accent: #6c5ce7;
+            --accent-hover: #7d6ff0;
+            --green: #00b894;
+            --red: #e17055;
+            --text: #f1f1f1;
+            --text-dim: #9ca3af;
+            --border: #2d3041;
+            --radius: 16px;
+        }
 
         body {
-            margin: 0;
             padding: 16px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #f8fafc;
-            color: #111827;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
         }
 
         main {
-            max-width: 420px;
+            max-width: 440px;
             margin: 0 auto;
         }
 
+        /* === HEADER === */
         header {
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
             gap: 8px;
-            margin-bottom: 20px;
         }
         header h1 {
-            margin: 0;
             font-size: 22px;
             font-weight: 700;
         }
-        header span {
-            font-size: 22px;
+        header span.logo {
+            font-size: 24px;
         }
 
-        .screen {
-            display: none;
-        }
-        .screen.active {
-            display: block;
+        /* User greeting */
+        #user-greeting {
+            font-size: 12px;
+            color: var(--text-dim);
         }
 
-        /* Страница 1 — сетка лотов */
+        /* === SEARCH === */
+        .search-bar {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-size: 14px;
+            margin-bottom: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-bar:focus {
+            border-color: var(--accent);
+        }
+        .search-bar::placeholder {
+            color: var(--text-dim);
+        }
+
+        /* === CATEGORY TABS === */
+        .category-tabs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 14px;
+            scrollbar-width: none;
+        }
+        .category-tabs::-webkit-scrollbar { display: none; }
+        .cat-tab {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text-dim);
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .cat-tab.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        /* === SCREENS === */
+        .screen { display: none; }
+        .screen.active { display: block; }
+
+        /* === GRID === */
         .lots-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
         }
 
         .lot-card {
-            background: #ffffff;
-            border-radius: 14px;
-            padding: 10px 6px;
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 14px 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.10);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: transform 0.15s, border-color 0.2s;
+            position: relative;
+        }
+        .lot-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
         }
 
+        /* Badge */
+        .lot-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-weight: 700;
+        }
+        .badge-hot { background: var(--red); color: #fff; }
+        .badge-new { background: var(--green); color: #fff; }
+
         .lot-image-placeholder {
-            width: 70px;
-            height: 70px;
+            width: 72px;
+            height: 72px;
             border-radius: 50%;
-            border: 2px solid #111827;
-            margin-bottom: 6px;
+            border: 2px solid var(--accent);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            background: rgba(108,92,231,0.1);
         }
 
         .lot-name {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             margin-bottom: 2px;
         }
-
         .lot-desc {
             font-size: 11px;
-            color: #6b7280;
+            color: var(--text-dim);
             text-align: center;
-            min-height: 24px;
+            min-height: 18px;
         }
-
         .lot-price {
-            font-size: 13px;
-            font-weight: 600;
-            margin-top: 4px;
-            margin-bottom: 6px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--green);
+            margin-top: 6px;
+            margin-bottom: 8px;
         }
 
+        /* === BUTTONS === */
         .btn {
-            padding: 8px 14px;
+            padding: 10px 16px;
             font-size: 13px;
             font-weight: 600;
             border-radius: 999px;
             border: none;
             cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
         }
+        .btn:active { transform: scale(0.96); }
 
-        .btn-outline-green {
-            background: transparent;
-            color: #16a34a;
-            border: 1px solid #16a34a;
+        .btn-accent {
+            background: var(--accent);
+            color: #fff;
         }
+        .btn-accent:hover { background: var(--accent-hover); }
 
         .btn-green {
-            background: #16a34a;
-            color: #ffffff;
+            background: var(--green);
+            color: #fff;
         }
-
+        .btn-outline {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
         .btn-gray {
-            background: #e5e7eb;
-            color: #111827;
-        }
-
-        .btn:active {
-            transform: scale(0.97);
+            background: var(--border);
+            color: var(--text);
         }
 
         .hint {
             margin-top: 18px;
             font-size: 11px;
-            color: #6b7280;
+            color: var(--text-dim);
             text-align: center;
         }
 
-        /* Страница 2 — карточка товара */
+        /* === DETAIL === */
         .detail-card {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 16px;
-            box-shadow: 0 1px 6px rgba(15,23,42,0.12);
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 20px;
+            border: 1px solid var(--border);
         }
 
         .detail-top {
             display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 14px;
+            margin-bottom: 14px;
             align-items: center;
         }
-
         .detail-image {
-            width: 96px;
-            height: 96px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
-            border: 2px solid #111827;
+            border: 2px solid var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            background: rgba(108,92,231,0.1);
+            flex-shrink: 0;
         }
-
-        .detail-title {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .detail-desc {
-            font-size: 13px;
-            color: #4b5563;
-        }
+        .detail-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+        .detail-desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
 
         .qty-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-top: 12px;
+            margin-top: 14px;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 12px;
         }
-
-        .qty-controls {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
+        .qty-controls { display: flex; align-items: center; gap: 12px; }
         .qty-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 999px;
-            border: 1px solid #d1d5db;
-            background: #f9fafb;
-            font-size: 18px;
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-size: 20px;
             line-height: 0;
             cursor: pointer;
+            transition: background 0.2s;
         }
-
-        .qty-value {
-            min-width: 32px;
-            text-align: center;
-            font-weight: 600;
-        }
-
-        .detail-price {
-            font-size: 16px;
-            font-weight: 700;
-        }
+        .qty-btn:hover { background: var(--accent); }
+        .qty-value { min-width: 36px; text-align: center; font-weight: 700; font-size: 18px; }
+        .detail-price { font-size: 18px; font-weight: 700; color: var(--green); }
 
         .detail-actions {
             display: flex;
@@ -228,26 +286,62 @@
             margin-top: 16px;
         }
 
-        /* Страница 3 — “оплата” */
+        /* === PAY === */
         .pay-summary {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 16px;
-            box-shadow: 0 1px 6px rgba(15,23,42,0.12);
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 20px;
+            border: 1px solid var(--border);
         }
-
         .pay-row {
             display: flex;
             justify-content: space-between;
             font-size: 14px;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
         }
-
+        .pay-row:last-child { border-bottom: none; }
         .pay-row.total {
             font-weight: 700;
-            font-size: 16px;
+            font-size: 17px;
             margin-top: 8px;
+            color: var(--green);
+            border-bottom: none;
         }
+
+        /* Payment method selector */
+        .pay-methods {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .pay-method-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .pay-method-btn:hover {
+            border-color: var(--accent);
+        }
+        .pay-method-btn.selected {
+            border-color: var(--accent);
+            background: rgba(108,92,231,0.15);
+        }
+        .pay-method-btn .pm-icon { font-size: 20px; }
+        .pay-method-btn .pm-info { display: flex; flex-direction: column; }
+        .pay-method-btn .pm-name { font-size: 14px; }
+        .pay-method-btn .pm-desc { font-size: 10px; color: var(--text-dim); font-weight: 400; }
 
         .pay-actions {
             margin-top: 16px;
@@ -255,8 +349,79 @@
             gap: 10px;
         }
 
+        /* === TOAST === */
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%; transform: translateX(-50%);
+            padding: 10px 20px;
+            border-radius: 12px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 999;
+        }
+        .toast.show { opacity: 1; }
+
+        /* === CART BADGE === */
+        .cart-float {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(108,92,231,0.4);
+            transition: transform 0.2s;
+            z-index: 100;
+        }
+        .cart-float:hover { transform: scale(1.1); }
+        .cart-count {
+            position: absolute;
+            top: -4px; right: -4px;
+            background: var(--red);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* === CART SCREEN === */
+        .cart-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+        .cart-item-left { display: flex; align-items: center; gap: 10px; }
+        .cart-item-icon { font-size: 24px; }
+        .cart-item-name { font-weight: 600; font-size: 14px; }
+        .cart-item-meta { font-size: 12px; color: var(--text-dim); }
+        .cart-item-remove {
+            background: none; border: none;
+            color: var(--red); font-size: 18px; cursor: pointer;
+        }
+        .cart-empty { text-align: center; color: var(--text-dim); padding: 40px 0; font-size: 14px; }
+
         @media (max-width: 360px) {
-            .lots-grid { grid-template-columns: repeat(2, 1fr); }
+            .lots-grid { grid-template-columns: 1fr; }
             .detail-top { flex-direction: column; align-items: flex-start; }
         }
     </style>
@@ -264,21 +429,35 @@
 <body>
 <main>
     <header>
-        <span>🛒</span>
-        <h1>Магазин</h1>
+        <div class="header-left">
+            <span class="logo">🛒</span>
+            <h1>Магазин</h1>
+        </div>
+        <div id="user-greeting"></div>
     </header>
 
-    <!-- Страница 1: список лотов -->
+    <!-- ПОИСК -->
+    <input type="text" class="search-bar" id="search-input" placeholder="🔍 Найти товар..." />
+
+    <!-- КАТЕГОРИИ -->
+    <div class="category-tabs" id="category-tabs">
+        <div class="cat-tab active" data-cat="all">Все</div>
+        <div class="cat-tab" data-cat="digital">Цифровое</div>
+        <div class="cat-tab" data-cat="physical">Физические</div>
+        <div class="cat-tab" data-cat="service">Услуги</div>
+    </div>
+
+    <!-- Страница 1: список -->
     <section id="screen-list" class="screen active">
         <div class="lots-grid" id="lots-grid"></div>
-        <div class="hint">Выбери лот → «КУПИТЬ» для подробностей и оформления.</div>
+        <div class="hint">Нажми на карточку → подробности и оплата</div>
     </section>
 
     <!-- Страница 2: карточка товара -->
     <section id="screen-detail" class="screen">
         <div class="detail-card">
             <div class="detail-top">
-                <div class="detail-image"></div>
+                <div class="detail-image" id="detail-icon"></div>
                 <div>
                     <div id="detail-title" class="detail-title"></div>
                     <div id="detail-desc" class="detail-desc"></div>
@@ -295,13 +474,25 @@
             </div>
 
             <div class="detail-actions">
-                <button id="btn-back-from-detail" class="btn btn-gray" style="flex:1;">Назад</button>
-                <button id="btn-to-pay" class="btn btn-green" style="flex:2;">К ОПЛАТЕ</button>
+                <button id="btn-back-from-detail" class="btn btn-gray" style="flex:1;">← Назад</button>
+                <button id="btn-add-cart" class="btn btn-accent" style="flex:1;">🛒 В корзину</button>
+                <button id="btn-to-pay" class="btn btn-green" style="flex:1;">К оплате →</button>
             </div>
         </div>
     </section>
 
-    <!-- Страница 3: оплата -->
+    <!-- Страница 3: корзина -->
+    <section id="screen-cart" class="screen">
+        <h2 style="margin-bottom:14px;font-size:18px;">🛒 Корзина</h2>
+        <div id="cart-items"></div>
+        <div id="cart-total" style="font-size:17px;font-weight:700;color:var(--green);margin:12px 0;"></div>
+        <div class="detail-actions">
+            <button id="btn-back-from-cart" class="btn btn-gray" style="flex:1;">← Магазин</button>
+            <button id="btn-cart-checkout" class="btn btn-green" style="flex:2;">Оформить заказ</button>
+        </div>
+    </section>
+
+    <!-- Страница 4: оплата -->
     <section id="screen-pay" class="screen">
         <div class="pay-summary">
             <div class="pay-row">
@@ -317,189 +508,461 @@
                 <span id="pay-price"></span>
             </div>
             <div class="pay-row total">
-                <span>Итого к оплате</span>
+                <span>Итого</span>
                 <span id="pay-total"></span>
             </div>
         </div>
 
-        <div class="pay-actions">
-            <button id="btn-back-from-pay" class="btn btn-gray" style="flex:1;">Назад</button>
-            <button onclick="payWithTON()">💰 Оплатить TON</button>
-            
-            
-    
-
-    
-
-</button>
+        <!-- Выбор метода оплаты -->
+        <div class="pay-methods" id="pay-methods">
+            <div class="pay-method-btn selected" data-method="tonconnect">
+                <span class="pm-icon">💎</span>
+                <div class="pm-info">
+                    <span class="pm-name">TON Connect</span>
+                    <span class="pm-desc">Tonkeeper, MyTonWallet, OpenMask</span>
+                </div>
+            </div>
+            <div class="pay-method-btn" data-method="cryptobot">
+                <span class="pm-icon">🤖</span>
+                <div class="pm-info">
+                    <span class="pm-name">CryptoBot (Crypto Pay)</span>
+                    <span class="pm-desc">BTC, ETH, USDT, TON, LTC, BNB, TRX, USDC</span>
+                </div>
+            </div>
+            <div class="pay-method-btn" data-method="xrocket">
+                <span class="pm-icon">🚀</span>
+                <div class="pm-info">
+                    <span class="pm-name">xRocket</span>
+                    <span class="pm-desc">USDT, TON, BTC и другие</span>
+                </div>
+            </div>
+            <div class="pay-method-btn" data-method="stars">
+                <span class="pm-icon">⭐</span>
+                <div class="pm-info">
+                    <span class="pm-name">Telegram Stars</span>
+                    <span class="pm-desc">Оплата Stars внутри Telegram</span>
+                </div>
+            </div>
         </div>
 
-        <div class="hint">Здесь пока тестовая “оплата” без настоящих денег.</div>
+        <div class="pay-actions">
+            <button id="btn-back-from-pay" class="btn btn-gray" style="flex:1;">← Назад</button>
+            <button id="btn-confirm-pay" class="btn btn-green" style="flex:2;">💰 Оплатить</button>
+        </div>
     </section>
 </main>
 
-<script>
-    const tg = window.Telegram ? Telegram.WebApp : null;
+<!-- Floating cart button -->
+<div class="cart-float" id="cart-float" style="display:none;">
+    🛒
+    <div class="cart-count" id="cart-count">0</div>
+</div>
 
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+    // ===================== INIT =====================
+    const tg = window.Telegram ? Telegram.WebApp : null;
+    let tonConnectUI = null;
+
+    // ===================== PRODUCTS =====================
     const products = [
-        { id: 1, name: "лот 1", price: 500, description: "Описание продукта 1" },
-        { id: 2, name: "лот 2", price: 700, description: "Описание продукта 2" },
-        { id: 3, name: "лот 3", price: 900, description: "Описание продукта 3" },
-        { id: 4, name: "лот 1", price: 500, description: "Описание продукта 4" },
-        { id: 5, name: "лот 2", price: 700, description: "Описание продукта 5" },
-        { id: 6, name: "лот 3", price: 900, description: "Описание продукта 6" }
+        { id: 1, name: "VPN Подписка", price: 500, description: "Безлимитный VPN на 30 дней", category: "digital", icon: "🔐", badge: "hot" },
+        { id: 2, name: "Дизайн лого",  price: 1500, description: "Профессиональный логотип для бренда", category: "service", icon: "🎨", badge: "new" },
+        { id: 3, name: "NFT Коллекция", price: 900, description: "Уникальный цифровой арт", category: "digital", icon: "🖼️", badge: "" },
+        { id: 4, name: "Мерч футболка", price: 2000, description: "Хлопок 100%, печать premium", category: "physical", icon: "👕", badge: "" },
+        { id: 5, name: "Бот на заказ",  price: 5000, description: "Telegram-бот под ваши нужды", category: "service", icon: "🤖", badge: "hot" },
+        { id: 6, name: "Крипто-курс",   price: 3000, description: "Обучение трейдингу 10 уроков", category: "digital", icon: "📚", badge: "new" }
     ];
 
-    const screens = {
-        list: document.getElementById("screen-list"),
-        detail: document.getElementById("screen-detail"),
-        pay: document.getElementById("screen-pay")
-    };
-
-    const lotsGridEl = document.getElementById("lots-grid");
-    const detailTitleEl = document.getElementById("detail-title");
-    const detailDescEl = document.getElementById("detail-desc");
-    const detailPriceEl = document.getElementById("detail-price");
-    const qtyValueEl = document.getElementById("qty-value");
-
-    const payNameEl = document.getElementById("pay-name");
-    const payQtyEl = document.getElementById("pay-qty");
-    const payPriceEl = document.getElementById("pay-price");
-    const payTotalEl = document.getElementById("pay-total");
-
+    // ===================== STATE =====================
     let currentProduct = null;
     let currentQty = 1;
+    let selectedPayMethod = "tonconnect";
+    let cart = [];
+    let activeCategory = "all";
 
+    // ===================== DOM =====================
+    const screens = {
+        list:   document.getElementById("screen-list"),
+        detail: document.getElementById("screen-detail"),
+        pay:    document.getElementById("screen-pay"),
+        cart:   document.getElementById("screen-cart")
+    };
+
+    const $ = id => document.getElementById(id);
+
+    // ===================== 1. SCREEN NAVIGATION =====================
     function showScreen(name) {
         Object.values(screens).forEach(s => s.classList.remove("active"));
         screens[name].classList.add("active");
+        window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
-    function renderLots() {
-        lotsGridEl.innerHTML = "";
-        products.forEach(p => {
+    // ===================== 2. TOAST NOTIFICATIONS =====================
+    function showToast(msg) {
+        const t = $("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 2000);
+    }
+
+    // ===================== 3. RENDER PRODUCTS =====================
+    function renderLots(filter = "", cat = "all") {
+        const grid = $("lots-grid");
+        grid.innerHTML = "";
+        const filtered = products.filter(p => {
+            const matchCat = cat === "all" || p.category === cat;
+            const matchSearch = p.name.toLowerCase().includes(filter.toLowerCase()) ||
+                                p.description.toLowerCase().includes(filter.toLowerCase());
+            return matchCat && matchSearch;
+        });
+
+        if (filtered.length === 0) {
+            grid.innerHTML = '<div class="hint" style="grid-column:1/-1;padding:40px 0;">Ничего не найдено 😔</div>';
+            return;
+        }
+
+        filtered.forEach(p => {
             const card = document.createElement("article");
             card.className = "lot-card";
             card.dataset.id = p.id;
 
+            let badgeHTML = "";
+            if (p.badge === "hot") badgeHTML = '<div class="lot-badge badge-hot">🔥 ХИТ</div>';
+            if (p.badge === "new") badgeHTML = '<div class="lot-badge badge-new">NEW</div>';
+
             card.innerHTML = `
-                <div class="lot-image-placeholder"></div>
+                ${badgeHTML}
+                <div class="lot-image-placeholder">${p.icon}</div>
                 <div class="lot-name">${p.name}</div>
                 <div class="lot-desc">${p.description}</div>
                 <div class="lot-price">${p.price}₽</div>
-                <button class="btn btn-outline-green">КУПИТЬ</button>
+                <button class="btn btn-outline" style="width:100%;">Подробнее</button>
             `;
-            lotsGridEl.appendChild(card);
+            grid.appendChild(card);
         });
     }
 
+    // ===================== 4. DETAIL =====================
     function openDetail(productId) {
         const p = products.find(x => x.id === productId);
         if (!p) return;
 
         currentProduct = p;
         currentQty = 1;
-        qtyValueEl.textContent = "1";
-        detailTitleEl.textContent = p.name;
-        detailDescEl.textContent = p.description;
-        detailPriceEl.textContent = `${p.price}₽ / шт.`;
+        $("qty-value").textContent = "1";
+        $("detail-title").textContent = p.name;
+        $("detail-desc").textContent = p.description;
+        $("detail-price").textContent = `${p.price}₽ / шт.`;
+        $("detail-icon").textContent = p.icon;
 
         showScreen("detail");
     }
 
+    // ===================== 5. QUANTITY =====================
     function updateQty(delta) {
         let next = currentQty + delta;
         if (next < 1) next = 1;
         if (next > 99) next = 99;
         currentQty = next;
-        qtyValueEl.textContent = String(currentQty);
+        $("qty-value").textContent = String(currentQty);
     }
 
+    // ===================== 6. CART =====================
+    function addToCart() {
+        if (!currentProduct) return;
+        const existing = cart.find(c => c.product.id === currentProduct.id);
+        if (existing) {
+            existing.qty += currentQty;
+        } else {
+            cart.push({ product: { ...currentProduct }, qty: currentQty });
+        }
+        updateCartBadge();
+        showToast(`${currentProduct.icon} ${currentProduct.name} добавлен в корзину!`);
+        showScreen("list");
+    }
+
+    function removeFromCart(productId) {
+        cart = cart.filter(c => c.product.id !== productId);
+        updateCartBadge();
+        renderCart();
+    }
+
+    function updateCartBadge() {
+        const total = cart.reduce((s, c) => s + c.qty, 0);
+        $("cart-count").textContent = total;
+        $("cart-float").style.display = total > 0 ? "flex" : "none";
+    }
+
+    function renderCart() {
+        const container = $("cart-items");
+        if (cart.length === 0) {
+            container.innerHTML = '<div class="cart-empty">Корзина пуста 🛒</div>';
+            $("cart-total").textContent = "";
+            return;
+        }
+        let html = "";
+        let grandTotal = 0;
+        cart.forEach(c => {
+            const subtotal = c.product.price * c.qty;
+            grandTotal += subtotal;
+            html += `
+                <div class="cart-item">
+                    <div class="cart-item-left">
+                        <span class="cart-item-icon">${c.product.icon}</span>
+                        <div>
+                            <div class="cart-item-name">${c.product.name}</div>
+                            <div class="cart-item-meta">${c.qty} шт. × ${c.product.price}₽ = ${subtotal}₽</div>
+                        </div>
+                    </div>
+                    <button class="cart-item-remove" data-remove="${c.product.id}">✕</button>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+        $("cart-total").textContent = `Итого: ${grandTotal}₽`;
+
+        container.querySelectorAll("[data-remove]").forEach(btn => {
+            btn.addEventListener("click", () => removeFromCart(Number(btn.dataset.remove)));
+        });
+    }
+
+    // ===================== 7. PAY SCREEN =====================
     function preparePayScreen() {
         if (!currentProduct) return;
-
         const total = currentProduct.price * currentQty;
 
-        payNameEl.textContent = currentProduct.name;
-        payQtyEl.textContent = `${currentQty} шт.`;
-        payPriceEl.textContent = `${currentProduct.price}₽`;
-        payTotalEl.textContent = `${total}₽`;
+        $("pay-name").textContent  = currentProduct.name;
+        $("pay-qty").textContent   = `${currentQty} шт.`;
+        $("pay-price").textContent = `${currentProduct.price}₽`;
+        $("pay-total").textContent = `${total}₽`;
 
         showScreen("pay");
     }
 
-    function sendFakePayment() {
-        if (!currentProduct) return;
-        const total = currentProduct.price * currentQty;
-
-        const payload = {
-            type: "order",
-            id: currentProduct.id,
-            name: currentProduct.name,
-            price: currentProduct.price,
-            quantity: currentQty,
-            total: total
-        };
-
-        if (tg) {
-            try {
-                tg.sendData(JSON.stringify(payload));
-            } catch (e) {
-                console.error("Ошибка sendData:", e);
-                alert("Не удалось отправить заказ в бота.");
-                return;
-            }
-            tg.close();
-        } else {
-            alert("WebApp вне Telegram, заказ: " + JSON.stringify(payload, null, 2));
+    function preparePayFromCart() {
+        if (cart.length === 0) {
+            showToast("Корзина пуста!");
+            return;
         }
+        const names = cart.map(c => c.product.name).join(", ");
+        const totalQty = cart.reduce((s, c) => s + c.qty, 0);
+        const grandTotal = cart.reduce((s, c) => s + c.product.price * c.qty, 0);
+
+        $("pay-name").textContent  = names;
+        $("pay-qty").textContent   = `${totalQty} шт.`;
+        $("pay-price").textContent = "—";
+        $("pay-total").textContent = `${grandTotal}₽`;
+
+        currentProduct = { id: 0, name: names, price: grandTotal, description: "Заказ из корзины", icon: "🛒" };
+        currentQty = 1;
+
+        showScreen("pay");
     }
 
-    // Слушатели
-    lotsGridEl.addEventListener("click", (e) => {
-        const card = e.target.closest(".lot-card");
-        if (!card) return;
-        const id = Number(card.dataset.id);
-        openDetail(id);
-    });
-
-    document.querySelectorAll(".qty-btn").forEach(btn => {
+    // ===================== 8. PAYMENT METHOD SELECT =====================
+    document.querySelectorAll(".pay-method-btn").forEach(btn => {
         btn.addEventListener("click", () => {
-            const delta = Number(btn.dataset.delta);
-            updateQty(delta);
+            document.querySelectorAll(".pay-method-btn").forEach(b => b.classList.remove("selected"));
+            btn.classList.add("selected");
+            selectedPayMethod = btn.dataset.method;
         });
     });
 
-    document.getElementById("btn-back-from-detail")
-        .addEventListener("click", () => showScreen("list"));
+    // ===================== 9. PAY HANDLERS =====================
 
-    document.getElementById("btn-to-pay")
-        .addEventListener("click", preparePayScreen);
+    // 9a. TON Connect
+    async function payTonConnect() {
+        if (!tonConnectUI) {
+            showToast("⚠️ TON Connect не инициализирован");
+            return;
+        }
+        const totalFiat = currentProduct.price * currentQty;
+        const totalTon = (totalFiat * 0.013) / 1.20;
 
-    document.getElementById("btn-back-from-pay")
-        .addEventListener("click", () => showScreen("detail"));
+        const tx = {
+            validUntil: Math.floor(Date.now() / 1000) + 300,
+            messages: [{
+                address: "YOUR_TON_WALLET_ADDRESS", // ← ЗАМЕНИ
+                amount: Math.round(totalTon * 1e9).toString()
+            }]
+        };
 
-    document.getElementById("btn-pay")
-        .addEventListener("click", sendFakePayment);
+        try {
+            const result = await tonConnectUI.sendTransaction(tx);
+            sendOrderToBot("ton_connect", result.boc || "ok");
+        } catch (e) {
+            showToast("❌ Оплата отменена");
+        }
+    }
 
+    // 9b. CryptoBot (Crypto Pay @CryptoBot)
+    function payCryptoBot() {
+        const totalFiat = currentProduct.price * currentQty;
+        const orderData = {
+            type: "create_invoice",
+            method: "cryptobot",
+            name: currentProduct.name,
+            quantity: currentQty,
+            total_rub: totalFiat
+        };
+        if (tg) {
+            tg.sendData(JSON.stringify(orderData));
+            showToast("📨 Запрос отправлен боту — ожидай ссылку на оплату");
+        } else {
+            showToast("CryptoBot: бот создаст инвойс через @CryptoBot API");
+            alert(JSON.stringify(orderData, null, 2));
+        }
+    }
+
+    // 9c. xRocket
+    function payXRocket() {
+        const totalFiat = currentProduct.price * currentQty;
+        const orderData = {
+            type: "create_invoice",
+            method: "xrocket",
+            name: currentProduct.name,
+            quantity: currentQty,
+            total_rub: totalFiat
+        };
+        if (tg) {
+            tg.sendData(JSON.stringify(orderData));
+            showToast("🚀 Запрос отправлен — ожидай ссылку xRocket");
+        } else {
+            showToast("xRocket: бот создаст инвойс через Rocket Pay API");
+            alert(JSON.stringify(orderData, null, 2));
+        }
+    }
+
+    // 9d. Telegram Stars
+    function payStars() {
+        const totalFiat = currentProduct.price * currentQty;
+        const orderData = {
+            type: "create_invoice",
+            method: "stars",
+            name: currentProduct.name,
+            quantity: currentQty,
+            total_rub: totalFiat
+        };
+        if (tg) {
+            tg.sendData(JSON.stringify(orderData));
+            showToast("⭐ Запрос отправлен — бот создаст Stars-инвойс");
+        } else {
+            showToast("Stars: бот создаст инвойс через Bot Payments API (XTR)");
+            alert(JSON.stringify(orderData, null, 2));
+        }
+    }
+
+    // Universal pay dispatcher
+    function confirmPay() {
+        switch (selectedPayMethod) {
+            case "tonconnect": payTonConnect(); break;
+            case "cryptobot":  payCryptoBot();  break;
+            case "xrocket":    payXRocket();    break;
+            case "stars":      payStars();      break;
+            default: showToast("Выбери способ оплаты");
+        }
+    }
+
+    // ===================== 10. SEND ORDER TO BOT =====================
+    function sendOrderToBot(method, txRef) {
+        const totalFiat = currentProduct.price * currentQty;
+        const payload = {
+            type: "order_paid",
+            method: method,
+            tx_ref: txRef,
+            order: {
+                name: currentProduct.name,
+                price: currentProduct.price,
+                quantity: currentQty,
+                total: totalFiat
+            }
+        };
+        if (tg) {
+            tg.sendData(JSON.stringify(payload));
+            tg.close();
+        } else {
+            alert("Заказ: " + JSON.stringify(payload, null, 2));
+        }
+    }
+
+    // ===================== EVENTS =====================
+
+    // Product grid click
+    $("lots-grid").addEventListener("click", (e) => {
+        const card = e.target.closest(".lot-card");
+        if (!card) return;
+        openDetail(Number(card.dataset.id));
+    });
+
+    // Qty buttons
+    document.querySelectorAll(".qty-btn").forEach(btn => {
+        btn.addEventListener("click", () => updateQty(Number(btn.dataset.delta)));
+    });
+
+    // Navigation
+    $("btn-back-from-detail").addEventListener("click", () => showScreen("list"));
+    $("btn-to-pay").addEventListener("click", preparePayScreen);
+    $("btn-add-cart").addEventListener("click", addToCart);
+    $("btn-back-from-pay").addEventListener("click", () => showScreen("detail"));
+    $("btn-confirm-pay").addEventListener("click", confirmPay);
+
+    // Cart
+    $("cart-float").addEventListener("click", () => { renderCart(); showScreen("cart"); });
+    $("btn-back-from-cart").addEventListener("click", () => showScreen("list"));
+    $("btn-cart-checkout").addEventListener("click", preparePayFromCart);
+
+    // Search (debounced)
+    let searchTimer;
+    $("search-input").addEventListener("input", (e) => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => renderLots(e.target.value, activeCategory), 250);
+    });
+
+    // Category tabs
+    $("category-tabs").addEventListener("click", (e) => {
+        const tab = e.target.closest(".cat-tab");
+        if (!tab) return;
+        document.querySelectorAll(".cat-tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        activeCategory = tab.dataset.cat;
+        renderLots($("search-input").value, activeCategory);
+    });
+
+    // ===================== STARTUP =====================
     renderLots();
 
     if (tg) {
         tg.ready();
         tg.expand();
-    }
-</script>    renderLots();
 
-    if (tg) {
-        tg.ready();
-        tg.expand();
-    }
-</script> let tonConnectUI;
-    if (typeof TonConnectUI !== 'undefined') {
-        tonConnect
-</body>
-</html>
+        // Greeting
+        const user = tg.initDataUnsafe?.user;
+        if (user) {
+            $("user-greeting").textContent = `Привет, ${user.first_name}! 👋`;
+        }
 
+        // Theme sync
+        document.documentElement.style.setProperty("--bg", tg.themeParams?.bg_color || "#0f1117");
+        document.documentElement.style.setProperty("--card", tg.themeParams?.secondary_bg_color || "#1a1d27");
+    }
+
+    // Init TON Connect UI
+    window.addEventListener("load", () => {
+        if (window.TON_CONNECT_UI) {
+            try {
+                tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                    manifestUrl: "https://eclectic-cranachan-57cc2a.netlify.app/tonconnect-manifest.json"
+                });
+                console.log("TON Connect UI ready");
+            } catch (e) {
+                console.warn("TON Connect init error:", e);
+            }
+        }
+    });
+</script>
 </body>
 </html>
 
